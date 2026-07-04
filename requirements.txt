@@ -1,0 +1,4 @@
+# Runtime dependencies will be added as Jarvis modules are implemented.
+
+# Development and test dependencies
+pytest>=8.0
