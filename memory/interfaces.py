@@ -17,6 +17,10 @@ class IVectorStore(ABC):
     """
 
     @abstractmethod
+    async def initialize(self) -> None:
+        """Open or create the backend; must be called before other operations."""
+
+    @abstractmethod
     async def add_vectors(
         self, vectors: list[list[float]], metadata: list[dict[str, Any]], ids: list[str] | None = None
     ) -> list[str]:
@@ -26,7 +30,11 @@ class IVectorStore(ABC):
     async def search(
         self, query_vector: list[float], top_k: int = 10, metadata_filter: dict[str, Any] | None = None
     ) -> list[dict[str, Any]]:
-        """Return the *top_k* most similar vectors with metadata matching *metadata_filter*."""
+        """Return the *top_k* most similar vectors with metadata.
+
+        The returned list should contain dicts with at minimum ``"id"``,
+        ``"score"`` (cosine similarity in [0, 1]), and all metadata fields.
+        """
 
     @abstractmethod
     async def delete(self, ids: list[str]) -> None:
@@ -38,6 +46,14 @@ class IDocumentStore(ABC):
 
     Implementations: SQLite, Postgres, JSON file.
     """
+
+    @abstractmethod
+    async def initialize(self) -> None:
+        """Open or create the backend; must be called before other operations."""
+
+    @abstractmethod
+    async def close(self) -> None:
+        """Release backend resources."""
 
     @abstractmethod
     async def store(self, collection: str, document: dict[str, Any]) -> str:

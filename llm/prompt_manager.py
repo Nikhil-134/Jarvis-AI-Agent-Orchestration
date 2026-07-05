@@ -9,10 +9,12 @@ class PromptManager:
     def __init__(self, templates: dict[str, str] | None = None) -> None:
         """Initialize prompt templates."""
         self._templates = {
-            "planner": (
-                "Create a concise execution plan for this goal. "
-                "Return actionable steps only.\n\nGoal: $goal"
-            )
+            "responder": (
+                "You are Jarvis, a helpful AI assistant. Respond to the user "
+                "naturally and conversationally.\n\n"
+                "Relevant memory context:\n$memory_context\n\n"
+                "User: $goal\nAssistant:"
+            ),
         }
         self._templates.update(templates or {})
 

@@ -9,11 +9,11 @@ import llm.ollama_provider  # noqa: F401
 import llm.openai_provider  # noqa: F401
 
 from config.settings import Settings
-from llm.base import LLMConfig
+from llm.base import BaseLLMProvider, LLMConfig
 from llm.registry import get_provider_registry
 
 
-def build_llm_provider(settings: Settings) -> object:
+def build_llm_provider(settings: Settings) -> BaseLLMProvider:
     """Create an LLM provider from application settings.
 
     Uses the :class:`ProviderRegistry` to look up the provider class

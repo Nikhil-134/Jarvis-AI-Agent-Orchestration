@@ -47,15 +47,28 @@ async def test_planner_agent_uses_llm_provider_when_configured() -> None:
 
     assert result.success is True
     assert result.data["status"] == "completed"
-    assert result.data["plan"] == "1. inspect\n2. execute"
+    assert result.data["response"] == "1. inspect\n2. execute"
 
 
 @pytest.mark.asyncio
-async def test_memory_agent_handles_memory_tasks() -> None:
-    result = await MemoryAgent().handle(AgentTask(task_type="memory.retrieve"))
+async def test_memory_agent_handles_memory_tasks(tmp_path: str) -> None:
+    from memory.document_store import SQLiteDocumentStore
+    from memory.memory_manager import MemoryManager
+    from memory.memory_service import MemoryService
+    from memory.vector_store import ChromaVectorStore
+
+    vs = ChromaVectorStore(str(tmp_path / "ma_v"))
+    ds = SQLiteDocumentStore(str(tmp_path / "ma_d.db"))
+    mm = MemoryManager(vector_store=vs, document_store=ds, importance_threshold=0.0)
+    await mm.initialize()
+    svc = MemoryService(mm)
+
+    agent = MemoryAgent(memory_service=svc)
+    result = await agent.handle(AgentTask(task_type="memory.retrieve", payload={"memory_id": "nonexistent"}))
 
     assert result.success is True
     assert result.agent_name == "memory"
+    assert result.data["status"] == "not_found"
 
 
 @pytest.mark.asyncio

@@ -31,6 +31,7 @@ class ChatSession:
         self.provider = provider
         self.system_prompt = system_prompt
         self._history: list[ChatMessage] = []
+        self._prompt_cache: list[str] = []
 
     @property
     def history(self) -> tuple[ChatMessage, ...]:
@@ -40,26 +41,34 @@ class ChatSession:
     async def send(self, prompt: str) -> str:
         """Send a prompt, store user and assistant messages, return the response."""
         self._history.append(ChatMessage(role="user", content=prompt))
+        self._prompt_cache.append(f"user: {prompt}")
         response = await self.provider.generate(self._conversation_prompt(), self.system_prompt)
         self._history.append(ChatMessage(role="assistant", content=response))
+        self._prompt_cache.append(f"assistant: {response}")
         _logger.debug("Chat session send: %d messages in history", len(self._history))
         return response
 
     async def stream(self, prompt: str) -> list[str]:
         """Stream a prompt response and store the final assistant message."""
         self._history.append(ChatMessage(role="user", content=prompt))
+        self._prompt_cache.append(f"user: {prompt}")
         chunks: list[str] = []
         async for chunk in self.provider.stream(self._conversation_prompt(), self.system_prompt):
             chunks.append(chunk)
-        self._history.append(ChatMessage(role="assistant", content="".join(chunks)))
+        response = "".join(chunks)
+        self._history.append(ChatMessage(role="assistant", content=response))
+        self._prompt_cache.append(f"assistant: {response}")
         _logger.debug("Chat session stream: %d chunks, %d messages", len(chunks), len(self._history))
         return chunks
 
     def clear(self) -> None:
         """Clear all conversation history."""
         self._history.clear()
+        self._prompt_cache.clear()
         _logger.debug("Chat session history cleared")
 
     def _conversation_prompt(self) -> str:
         """Render history into a provider-neutral prompt string."""
+        if self._prompt_cache:
+            return "\n".join(self._prompt_cache)
         return "\n".join(f"{message.role}: {message.content}" for message in self._history)
