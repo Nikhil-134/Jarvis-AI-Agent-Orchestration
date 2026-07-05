@@ -1,18 +1,30 @@
 """Asynchronous task queue for orchestrated agent work."""
 
 import asyncio
-from collections.abc import Awaitable, Callable
+import logging
 
 from agents.contracts import AgentResult, AgentTask
+from orchestrator.interfaces import ITaskQueue, TaskHandler
 
-TaskHandler = Callable[[AgentTask], Awaitable[AgentResult]]
 
+class TaskQueue(ITaskQueue):
+    """Async queue that routes tasks through a provided task handler.
 
-class TaskQueue:
-    """Async queue that routes tasks through a provided task handler."""
+    Implements :class:`ITaskQueue`.  Workers process queued tasks
+    concurrently via the supplied *handler* (typically
+    :meth:`Orchestrator.route`).
+
+    Usage::
+
+        queue = TaskQueue(handler, worker_count=4)
+        await queue.start()
+        task_id = await queue.enqueue(task)
+        await queue.join()
+        result = queue.get_result(task_id)
+        await queue.stop()
+    """
 
     def __init__(self, handler: TaskHandler, worker_count: int = 1) -> None:
-        """Initialize the queue with an async task handler."""
         if worker_count < 1:
             raise ValueError("worker_count must be at least 1")
 
@@ -22,14 +34,13 @@ class TaskQueue:
         self._workers: list[asyncio.Task[None]] = []
         self._results: dict[str, AgentResult] = {}
         self._running = False
+        self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
     @property
     def is_running(self) -> bool:
-        """Return whether queue workers are active."""
         return self._running
 
     async def start(self) -> None:
-        """Start queue workers."""
         if self._running:
             return
 
@@ -38,9 +49,9 @@ class TaskQueue:
             asyncio.create_task(self._worker(), name=f"jarvis-task-worker-{index}")
             for index in range(self._worker_count)
         ]
+        self._logger.info("Started %d task queue worker(s)", self._worker_count)
 
     async def stop(self) -> None:
-        """Stop queue workers after cancelling pending worker loops."""
         if not self._running:
             return
 
@@ -49,40 +60,25 @@ class TaskQueue:
             worker.cancel()
         await asyncio.gather(*self._workers, return_exceptions=True)
         self._workers.clear()
+        self._logger.info("Task queue stopped")
 
     async def enqueue(self, task: AgentTask) -> str:
-        """Add a task to the queue and return its task id."""
         await self._queue.put(task)
+        self._logger.debug("Enqueued task '%s' of type '%s'", task.task_id, task.task_type)
         return task.task_id
 
     async def join(self) -> None:
-        """Wait until all queued tasks have been processed."""
         await self._queue.join()
 
     def get_result(self, task_id: str) -> AgentResult | None:
-        """Return a processed task result by task id."""
         return self._results.get(task_id)
 
     async def _worker(self) -> None:
-        """Continuously process queued tasks until cancelled."""
         while True:
             task = await self._queue.get()
             try:
                 self._results[task.task_id] = await self._handler(task)
+            except Exception:
+                self._logger.exception("Task '%s' failed in worker", task.task_id)
             finally:
                 self._queue.task_done()
-
-
-if __name__ == "__main__":
-    async def demo_handler(task: AgentTask) -> AgentResult:
-        return AgentResult("demo", task.task_id, True, "processed")
-
-    async def demo() -> None:
-        queue = TaskQueue(demo_handler)
-        await queue.start()
-        task_id = await queue.enqueue(AgentTask(task_type="demo"))
-        await queue.join()
-        print(queue.get_result(task_id))
-        await queue.stop()
-
-    asyncio.run(demo())

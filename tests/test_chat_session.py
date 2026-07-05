@@ -1,6 +1,8 @@
 """Tests for chat session history management."""
 
-from collections.abc import Iterable
+from collections.abc import AsyncIterable
+
+import pytest
 
 from llm import BaseLLMProvider, ChatSession, LLMConfig
 
@@ -8,35 +10,40 @@ from llm import BaseLLMProvider, ChatSession, LLMConfig
 class EchoProvider(BaseLLMProvider):
     """Simple provider used by chat session tests."""
 
+    def __init__(self) -> None:
+        super().__init__(LLMConfig(provider="echo", model="echo"))
+
     @property
     def name(self) -> str:
-        """Return provider name."""
         return "echo"
 
-    def generate(self, prompt: str, system_prompt: str | None = None) -> str:
-        """Return a deterministic response."""
+    async def _generate_once(
+        self, prompt: str, system_prompt: str | None, tools=None
+    ) -> str:
         return f"response:{prompt}"
 
-    def stream(self, prompt: str, system_prompt: str | None = None) -> Iterable[str]:
-        """Return deterministic stream chunks."""
-        return ("a", "b")
+    async def _stream_once(
+        self, prompt: str, system_prompt: str | None, tools=None
+    ) -> AsyncIterable[str]:
+        yield "a"
+        yield "b"
 
 
-def test_chat_session_stores_user_and_assistant_history() -> None:
-    """ChatSession should retain conversation history."""
-    session = ChatSession(EchoProvider(LLMConfig(provider="echo", model="echo")))
+@pytest.mark.asyncio
+async def test_chat_session_stores_user_and_assistant_history() -> None:
+    session = ChatSession(EchoProvider())
 
-    response = session.send("hello")
+    response = await session.send("hello")
 
     assert response == "response:user: hello"
     assert [message.role for message in session.history] == ["user", "assistant"]
 
 
-def test_chat_session_stream_stores_joined_assistant_history() -> None:
-    """ChatSession should store streamed assistant chunks as one message."""
-    session = ChatSession(EchoProvider(LLMConfig(provider="echo", model="echo")))
+@pytest.mark.asyncio
+async def test_chat_session_stream_stores_joined_assistant_history() -> None:
+    session = ChatSession(EchoProvider())
 
-    chunks = session.stream("hello")
+    chunks = await session.stream("hello")
 
     assert chunks == ["a", "b"]
     assert session.history[-1].content == "ab"

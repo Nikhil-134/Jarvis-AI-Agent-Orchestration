@@ -1,8 +1,12 @@
 """Planner agent implementation."""
 
+import logging
+
 from agents.base import Agent
 from agents.contracts import AgentResult, AgentTask
 from llm import BaseLLMProvider, ChatSession, LLMError, PromptManager
+
+_logger = logging.getLogger(__name__)
 
 
 class PlannerAgent(Agent):
@@ -13,7 +17,6 @@ class PlannerAgent(Agent):
         llm_provider: BaseLLMProvider | None = None,
         prompt_manager: PromptManager | None = None,
     ) -> None:
-        """Initialize the planner agent."""
         super().__init__(name="planner", supported_task_types=("plan",))
         self._prompt_manager = prompt_manager or PromptManager()
         self._chat_session = (
@@ -22,8 +25,7 @@ class PlannerAgent(Agent):
             else None
         )
 
-    def handle(self, task: AgentTask) -> AgentResult:
-        """Plan a task, using an LLM provider when one is configured."""
+    async def handle(self, task: AgentTask) -> AgentResult:
         if not self.can_handle(task):
             return AgentResult(
                 agent_name=self.name,
@@ -44,8 +46,9 @@ class PlannerAgent(Agent):
         goal = str(task.payload.get("goal", "No goal provided."))
         prompt = self._prompt_manager.render("planner", goal=goal)
         try:
-            plan = self._chat_session.send(prompt)
+            plan = await self._chat_session.send(prompt)
         except LLMError as exc:
+            _logger.exception("Planning LLM request failed for task %s", task.task_id)
             return AgentResult(
                 agent_name=self.name,
                 task_id=task.task_id,
@@ -61,8 +64,3 @@ class PlannerAgent(Agent):
             message="Planning completed with LLM provider.",
             data={"status": "completed", "plan": plan},
         )
-
-
-if __name__ == "__main__":
-    demo_task = AgentTask(task_type="plan", payload={"goal": "demo"})
-    print(PlannerAgent().handle(demo_task))

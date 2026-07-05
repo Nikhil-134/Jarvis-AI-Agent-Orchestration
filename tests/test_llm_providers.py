@@ -1,6 +1,6 @@
 """Tests for LLM provider behavior without network calls."""
 
-from collections.abc import Iterable
+from collections.abc import AsyncIterable
 
 import pytest
 
@@ -12,7 +12,6 @@ class FlakyProvider(BaseLLMProvider):
     """Provider that fails once before succeeding."""
 
     def __init__(self) -> None:
-        """Initialize retry test provider."""
         super().__init__(
             LLMConfig(
                 provider="flaky",
@@ -25,95 +24,101 @@ class FlakyProvider(BaseLLMProvider):
 
     @property
     def name(self) -> str:
-        """Return provider name."""
         return "flaky"
 
-    def generate(self, prompt: str, system_prompt: str | None = None) -> str:
-        """Generate using retry helper."""
-        return self._with_retries(self._operation)
-
-    def stream(self, prompt: str, system_prompt: str | None = None) -> Iterable[str]:
-        """Return no stream chunks."""
-        return ()
-
-    def _operation(self) -> str:
-        """Fail once, then succeed."""
+    async def _generate_once(
+        self, prompt: str, system_prompt: str | None, tools=None
+    ) -> str:
         self.calls += 1
         if self.calls == 1:
             raise LLMProviderError("temporary")
         return "ok"
 
+    async def _stream_once(
+        self, prompt: str, system_prompt: str | None, tools=None
+    ) -> AsyncIterable[str]:
+        return
+        yield
 
-def test_base_provider_retry_logic_retries_llm_errors() -> None:
-    """BaseLLMProvider should retry provider errors."""
+
+@pytest.mark.asyncio
+async def test_base_provider_retry_logic_retries_llm_errors() -> None:
     provider = FlakyProvider()
 
-    assert provider.generate("hello") == "ok"
+    result = await provider.generate("hello")
+
+    assert result == "ok"
     assert provider.calls == 2
 
 
-def test_openai_provider_parses_generate_response(monkeypatch) -> None:
-    """OpenAIProvider should extract message content."""
+@pytest.mark.asyncio
+async def test_openai_provider_parses_generate_response(monkeypatch) -> None:
     provider = OpenAIProvider(
         LLMConfig(provider="openai", model="test", api_key="key", retry_backoff_seconds=0)
     )
-    monkeypatch.setattr(
-        provider,
-        "_post_json",
-        lambda payload: {"choices": [{"message": {"content": "hello"}}]},
-    )
 
-    assert provider.generate("prompt") == "hello"
+    async def mock_post_json(url: str, payload: dict, headers: dict) -> dict:
+        return {"choices": [{"message": {"content": "hello"}}]}
+
+    monkeypatch.setattr(provider, "_http_post_json", mock_post_json)
+
+    result = await provider.generate("prompt")
+    assert result == "hello"
 
 
-def test_openai_provider_parses_stream_response(monkeypatch) -> None:
-    """OpenAIProvider should extract streamed delta content."""
+@pytest.mark.asyncio
+async def test_openai_provider_parses_stream_response(monkeypatch) -> None:
     provider = OpenAIProvider(
         LLMConfig(provider="openai", model="test", api_key="key", retry_backoff_seconds=0)
     )
-    monkeypatch.setattr(
-        provider,
-        "_stream_json_events",
-        lambda payload: iter(
-            [
-                {"choices": [{"delta": {"content": "he"}}]},
-                {"choices": [{"delta": {"content": "llo"}}]},
-                "[DONE]",
-            ]
-        ),
+
+    async def mock_stream_sse(payload: dict) -> AsyncIterable[dict | str]:
+        yield {"choices": [{"delta": {"content": "he"}}]}
+        yield {"choices": [{"delta": {"content": "llo"}}]}
+        yield "[DONE]"
+
+    monkeypatch.setattr(provider, "_stream_sse", mock_stream_sse)
+
+    chunks = [chunk async for chunk in provider.stream("prompt")]
+    assert chunks == ["he", "llo"]
+
+
+@pytest.mark.asyncio
+async def test_ollama_provider_parses_generate_response(monkeypatch) -> None:
+    provider = OllamaProvider(
+        LLMConfig(provider="ollama", model="test", retry_backoff_seconds=0)
     )
 
-    assert list(provider.stream("prompt")) == ["he", "llo"]
+    async def mock_post_json(url: str, payload: dict, headers: dict) -> dict:
+        return {"message": {"content": "hello"}}
+
+    monkeypatch.setattr(provider, "_http_post_json", mock_post_json)
+
+    result = await provider.generate("prompt")
+    assert result == "hello"
 
 
-def test_ollama_provider_parses_generate_response(monkeypatch) -> None:
-    """OllamaProvider should extract message content."""
-    provider = OllamaProvider(LLMConfig(provider="ollama", model="test", retry_backoff_seconds=0))
-    monkeypatch.setattr(provider, "_post_json", lambda payload: {"message": {"content": "hello"}})
-
-    assert provider.generate("prompt") == "hello"
-
-
-def test_ollama_provider_parses_stream_response(monkeypatch) -> None:
-    """OllamaProvider should extract streamed message content."""
-    provider = OllamaProvider(LLMConfig(provider="ollama", model="test", retry_backoff_seconds=0))
-    monkeypatch.setattr(
-        provider,
-        "_stream_json_lines",
-        lambda payload: iter(
-            [
-                {"message": {"content": "he"}, "done": False},
-                {"message": {"content": "llo"}, "done": True},
-            ]
-        ),
+@pytest.mark.asyncio
+async def test_ollama_provider_parses_stream_response(monkeypatch) -> None:
+    provider = OllamaProvider(
+        LLMConfig(provider="ollama", model="test", retry_backoff_seconds=0)
     )
 
-    assert list(provider.stream("prompt")) == ["he", "llo"]
+    async def mock_stream_jsonl(payload: dict) -> AsyncIterable[dict]:
+        yield {"message": {"content": "he"}, "done": False}
+        yield {"message": {"content": "llo"}, "done": True}
+
+    monkeypatch.setattr(provider, "_stream_jsonl", mock_stream_jsonl)
+
+    chunks = [chunk async for chunk in provider.stream("prompt")]
+    assert chunks == ["he", "llo"]
 
 
-def test_openai_provider_requires_api_key() -> None:
-    """OpenAIProvider should fail clearly without an API key."""
-    provider = OpenAIProvider(LLMConfig(provider="openai", model="test", max_retries=0))
+@pytest.mark.asyncio
+async def test_openai_provider_requires_api_key() -> None:
+    provider = OpenAIProvider(
+        LLMConfig(provider="openai", model="test", max_retries=0)
+    )
 
-    with pytest.raises(LLMProviderError):
-        provider.generate("prompt")
+    with pytest.raises(LLMProviderError, match="OPENAI_API_KEY"):
+        await provider.generate("prompt")

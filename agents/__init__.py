@@ -7,6 +7,7 @@ __all__ = [
     "AgentMessage",
     "AgentResult",
     "AgentTask",
+    "IAgent",
     "MemoryAgent",
     "PlannerAgent",
     "ToolAgent",
@@ -15,14 +16,14 @@ __all__ = [
 
 
 def __getattr__(name: str) -> Any:
-    """Load agent exports lazily so modules remain runnable with python -m."""
+    if name == "IAgent":
+        from agents.interfaces import IAgent
+        return IAgent
     if name == "Agent":
         from agents.base import Agent
-
         return Agent
     if name in {"AgentMessage", "AgentResult", "AgentTask"}:
         from agents.contracts import AgentMessage, AgentResult, AgentTask
-
         return {
             "AgentMessage": AgentMessage,
             "AgentResult": AgentResult,
@@ -30,18 +31,14 @@ def __getattr__(name: str) -> Any:
         }[name]
     if name == "MemoryAgent":
         from agents.memory_agent import MemoryAgent
-
         return MemoryAgent
     if name == "PlannerAgent":
         from agents.planner import PlannerAgent
-
         return PlannerAgent
     if name == "ToolAgent":
         from agents.tool_agent import ToolAgent
-
         return ToolAgent
     if name == "VoiceAgent":
         from agents.voice_agent import VoiceAgent
-
         return VoiceAgent
     raise AttributeError(f"module 'agents' has no attribute {name!r}")

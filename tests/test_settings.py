@@ -4,7 +4,6 @@ from config import load_settings
 
 
 def test_load_settings_reads_env_file(tmp_path) -> None:
-    """Settings should load provider configuration from a .env file."""
     env_file = tmp_path / ".env"
     env_file.write_text(
         "\n".join(

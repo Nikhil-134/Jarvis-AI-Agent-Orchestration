@@ -1,5 +1,6 @@
-"""Jarvis application entry point."""
+"""Jarvis application entry point (async)."""
 
+import asyncio
 import logging
 
 from agents import MemoryAgent, PlannerAgent, ToolAgent, VoiceAgent
@@ -13,6 +14,7 @@ def build_orchestrator() -> Orchestrator:
     """Create an orchestrator with all Jarvis agents registered."""
     settings = load_settings()
     llm_provider = build_llm_provider(settings) if settings.llm_enabled else None
+
     return Orchestrator(
         agents=(
             PlannerAgent(llm_provider=llm_provider),
@@ -23,15 +25,39 @@ def build_orchestrator() -> Orchestrator:
     )
 
 
-def main() -> None:
-    """Start the Jarvis orchestration system with a smoke task."""
+async def main() -> None:
+    """Start the Jarvis orchestration system (async REPL)."""
     settings = load_settings()
     configure_logging(settings.log_level)
     logger = logging.getLogger(__name__)
+
     orchestrator = build_orchestrator()
-    result = orchestrator.route(AgentTask(task_type="plan", payload={"goal": "startup"}))
-    logger.info("Startup route result: %s", result)
+
+    print("=" * 50)
+    print("JARVIS AI ASSISTANT")
+    print("Type 'exit' or 'quit' to stop.")
+    print("=" * 50)
+
+    while True:
+        goal = input("\nYou: ").strip()
+
+        if goal.lower() in ("exit", "quit"):
+            print("\nGoodbye!")
+            break
+
+        if not goal:
+            continue
+
+        result = await orchestrator.route(
+            AgentTask(
+                task_type="plan",
+                payload={"goal": goal},
+            )
+        )
+
+        print("\nJarvis:\n")
+        print(result.data.get("plan", result.message))
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

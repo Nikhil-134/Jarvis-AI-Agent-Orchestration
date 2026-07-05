@@ -7,7 +7,11 @@ from pathlib import Path
 
 @dataclass(frozen=True, slots=True)
 class Settings:
-    """Runtime settings for Jarvis."""
+    """Runtime settings for Jarvis.
+
+    All values are sourced from ``.env`` and/or process environment
+    variables, with sensible defaults for local-first development.
+    """
 
     environment: str = "development"
     log_level: str = "INFO"
@@ -58,7 +62,3 @@ def _read_env_file(path: Path) -> dict[str, str]:
 def _to_bool(value: str) -> bool:
     """Parse common truthy environment values."""
     return value.strip().lower() in {"1", "true", "yes", "on"}
-
-
-if __name__ == "__main__":
-    print(load_settings())

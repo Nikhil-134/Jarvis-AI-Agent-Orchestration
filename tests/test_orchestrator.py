@@ -13,41 +13,41 @@ from orchestrator import (
 )
 
 
-def test_register_adds_agent() -> None:
-    """Orchestrator should register agents by name."""
+@pytest.mark.asyncio
+async def test_register_adds_agent() -> None:
     orchestrator = Orchestrator()
     orchestrator.register(PlannerAgent())
 
     assert "planner" in orchestrator.agents
 
 
-def test_duplicate_agent_registration_raises() -> None:
-    """Orchestrator should reject duplicate agent names."""
+@pytest.mark.asyncio
+async def test_duplicate_agent_registration_raises() -> None:
     orchestrator = Orchestrator([PlannerAgent()])
 
     with pytest.raises(AgentAlreadyRegisteredError):
         orchestrator.register(PlannerAgent())
 
 
-def test_route_sends_task_to_matching_agent() -> None:
-    """Orchestrator should route supported tasks to the matching agent."""
+@pytest.mark.asyncio
+async def test_route_sends_task_to_matching_agent() -> None:
     orchestrator = Orchestrator([PlannerAgent()])
-    result = orchestrator.route(AgentTask(task_type="plan"))
+    result = await orchestrator.route(AgentTask(task_type="plan"))
 
     assert result.success is True
     assert result.agent_name == "planner"
 
 
-def test_route_without_matching_agent_raises() -> None:
-    """Orchestrator should fail clearly when no agent supports a task."""
+@pytest.mark.asyncio
+async def test_route_without_matching_agent_raises() -> None:
     orchestrator = Orchestrator([PlannerAgent()])
 
     with pytest.raises(NoAgentForTaskError):
-        orchestrator.route(AgentTask(task_type="unknown"))
+        await orchestrator.route(AgentTask(task_type="unknown"))
 
 
-def test_unregister_removes_agent() -> None:
-    """Orchestrator should dynamically remove registered agents."""
+@pytest.mark.asyncio
+async def test_unregister_removes_agent() -> None:
     orchestrator = Orchestrator([PlannerAgent()])
 
     removed = orchestrator.unregister("planner")
@@ -56,24 +56,20 @@ def test_unregister_removes_agent() -> None:
     assert "planner" not in orchestrator.agents
 
 
-def test_unregister_missing_agent_raises() -> None:
-    """Orchestrator should fail clearly when removing an unknown agent."""
+@pytest.mark.asyncio
+async def test_unregister_missing_agent_raises() -> None:
     orchestrator = Orchestrator()
 
     with pytest.raises(AgentNotRegisteredError):
         orchestrator.unregister("missing")
 
 
-def test_orchestrator_lifecycle_and_health_check() -> None:
-    """Orchestrator should manage agent lifecycle methods."""
-    async def run() -> dict[str, object]:
-        orchestrator = Orchestrator([PlannerAgent()])
-        await orchestrator.start()
-        health = await orchestrator.health_check()
-        await orchestrator.stop()
-        return health
-
-    health = asyncio.run(run())
+@pytest.mark.asyncio
+async def test_orchestrator_lifecycle_and_health_check() -> None:
+    orchestrator = Orchestrator([PlannerAgent()])
+    await orchestrator.start()
+    health = await orchestrator.health_check()
+    await orchestrator.stop()
 
     assert health["initialized"] is True
     assert health["started"] is True
@@ -81,15 +77,14 @@ def test_orchestrator_lifecycle_and_health_check() -> None:
     assert health["task_queue_running"] is True
 
 
-def test_orchestrator_enqueue_processes_task() -> None:
-    """Orchestrator should process tasks through the async queue."""
-    async def run() -> bool:
-        orchestrator = Orchestrator([PlannerAgent()])
-        await orchestrator.start()
-        task_id = await orchestrator.enqueue(AgentTask(task_type="plan"))
-        await orchestrator.task_queue.join()
-        result = orchestrator.task_queue.get_result(task_id)
-        await orchestrator.stop()
-        return result is not None and result.success
+@pytest.mark.asyncio
+async def test_orchestrator_enqueue_processes_task() -> None:
+    orchestrator = Orchestrator([PlannerAgent()])
+    await orchestrator.start()
+    task_id = await orchestrator.enqueue(AgentTask(task_type="plan"))
+    await orchestrator.task_queue.join()
+    result = orchestrator.task_queue.get_result(task_id)
+    await orchestrator.stop()
 
-    assert asyncio.run(run()) is True
+    assert result is not None
+    assert result.success is True

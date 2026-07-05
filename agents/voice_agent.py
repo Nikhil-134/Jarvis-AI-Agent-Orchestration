@@ -8,11 +8,9 @@ class VoiceAgent(Agent):
     """Agent responsible for voice input and output tasks."""
 
     def __init__(self) -> None:
-        """Initialize the voice agent."""
         super().__init__(name="voice", supported_task_types=("voice.input", "voice.output"))
 
-    def handle(self, task: AgentTask) -> AgentResult:
-        """Return a deterministic voice placeholder result."""
+    async def handle(self, task: AgentTask) -> AgentResult:
         if not self.can_handle(task):
             return AgentResult(
                 agent_name=self.name,
@@ -28,8 +26,3 @@ class VoiceAgent(Agent):
             message="Voice placeholder completed.",
             data={"status": "not_implemented"},
         )
-
-
-if __name__ == "__main__":
-    demo_task = AgentTask(task_type="voice.output", payload={"text": "demo"})
-    print(VoiceAgent().handle(demo_task))
