@@ -1,13 +1,27 @@
 """Tool system interface definitions for Jarvis.
 
-These interfaces define contracts for tool registration and execution.
-Implementations (built-in tools, MCP tools, plugin tools) will be
-added in future phases.
+Defines contracts for tool registration, execution, permissions,
+and capability discovery.  All tool implementations follow these
+interfaces so that built-in, plugin, and MCP tools are interchangeable.
 """
+
+from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from enum import IntEnum
 from typing import Any
+
+
+class PermissionLevel(IntEnum):
+    """Permission level for a tool.
+
+    SAFE tools execute without user confirmation.
+    DANGEROUS tools require explicit user confirmation.
+    """
+
+    SAFE = 0
+    DANGEROUS = 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,15 +34,22 @@ class ToolSpec:
 
 
 class ITool(ABC):
-    """Interface for an executable tool.
-
-    Implementations: file-system tools, web-search tools, code executors.
-    """
+    """Interface for an executable tool."""
 
     @property
     @abstractmethod
     def spec(self) -> ToolSpec:
         """Return the tool's specification (name, description, schema)."""
+
+    @property
+    @abstractmethod
+    def category(self) -> str:
+        """Return the tool's category for grouping/discovery."""
+
+    @property
+    @abstractmethod
+    def permission_level(self) -> PermissionLevel:
+        """Return the tool's permission level (SAFE or DANGEROUS)."""
 
     @abstractmethod
     async def execute(self, **kwargs: Any) -> dict[str, Any]:
@@ -40,10 +61,7 @@ class ITool(ABC):
 
 
 class IToolRegistry(ABC):
-    """Interface for registering and discovering tools.
-
-    Implementations: ToolRegistry (in-memory dict).
-    """
+    """Interface for registering and discovering tools."""
 
     @abstractmethod
     def register(self, tool: ITool) -> None:
@@ -60,3 +78,20 @@ class IToolRegistry(ABC):
     @abstractmethod
     def list_specs(self) -> list[ToolSpec]:
         """Return specs for all registered tools."""
+
+
+class IToolExecutionEngine(ABC):
+    """Interface for the tool execution engine."""
+
+    @property
+    @abstractmethod
+    def registry(self) -> IToolRegistry:
+        """Return the underlying tool registry."""
+
+    @abstractmethod
+    async def execute(self, name: str, **kwargs: Any) -> dict[str, Any]:
+        """Look up, authorise, and execute a tool.
+
+        Returns a dict with keys: ``success``, ``output``, ``execution_time_ms``.
+        Never raises — all errors are captured in the result.
+        """

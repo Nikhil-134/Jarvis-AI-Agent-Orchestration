@@ -30,6 +30,14 @@ build/
 dist/
 *.egg-info/
 
+# Runtime data
+memory_data/
+
+# Voice models (downloaded locally, large binaries — see requirements-voice.txt)
+voice_models/
+*.onnx
+*.onnx.json
+
 # IDE/editor
 .vscode/
 .idea/

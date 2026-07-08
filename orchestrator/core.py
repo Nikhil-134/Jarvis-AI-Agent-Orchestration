@@ -1,10 +1,12 @@
 """Task orchestration and agent routing with DIP and middleware."""
 
+from __future__ import annotations
+
 import logging
 from collections.abc import Iterable
+from typing import TYPE_CHECKING
 
 from agents.contracts import AgentResult, AgentTask
-from agents.interfaces import IAgent
 from orchestrator.exceptions import (
     AgentAlreadyRegisteredError,
     AgentNotRegisteredError,
@@ -15,6 +17,10 @@ from orchestrator.middleware import MiddlewarePipeline
 from orchestrator.message_bus import MessageBus
 from orchestrator.context import SharedContext
 from orchestrator.task_queue import TaskQueue
+from orchestrator.workflow import WorkflowEngine
+
+if TYPE_CHECKING:
+    from agents.interfaces import IAgent
 
 
 class Orchestrator:
@@ -26,6 +32,9 @@ class Orchestrator:
 
     A :class:`MiddlewarePipeline` allows before/after/on-error hooks to
     be registered for cross-cutting concerns (logging, metrics, auth).
+
+    A :class:`WorkflowEngine` is available for multi-agent workflow
+    coordination via the ``workflow_engine`` property.
     """
 
     def __init__(
@@ -34,12 +43,14 @@ class Orchestrator:
         context: ISharedContext | None = None,
         event_bus: IEventBus | None = None,
         task_queue: ITaskQueue | None = None,
+        workflow_engine: WorkflowEngine | None = None,
     ) -> None:
         self._agents: dict[str, IAgent] = {}
         self.context = context or SharedContext()
         self.event_bus = event_bus or MessageBus()
         self.middleware = MiddlewarePipeline()
         self.task_queue = task_queue or TaskQueue(self._route_async_handler)
+        self._workflow_engine = workflow_engine or WorkflowEngine(self._route_async_handler)
         self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
         self._initialized = False
         self._started = False
@@ -74,6 +85,10 @@ class Orchestrator:
     @property
     def agents(self) -> dict[str, IAgent]:
         return dict(self._agents)
+
+    @property
+    def workflow_engine(self) -> WorkflowEngine:
+        return self._workflow_engine
 
     def register(self, agent: IAgent) -> None:
         if agent.name in self._agents:

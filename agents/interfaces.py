@@ -1,10 +1,15 @@
 """Agent interface definitions for Jarvis."""
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
+from typing import TYPE_CHECKING
 
 from agents.contracts import AgentMessage, AgentResult, AgentTask
-from orchestrator.interfaces import IEventBus, ISharedContext
+
+if TYPE_CHECKING:
+    from orchestrator.interfaces import IEventBus, ISharedContext
 
 
 class IAgent(ABC):

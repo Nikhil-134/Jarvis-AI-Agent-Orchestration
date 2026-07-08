@@ -1,5 +1,7 @@
 """LLM provider interface definitions for Jarvis."""
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterable
 from dataclasses import dataclass, field
@@ -17,6 +19,48 @@ class ToolDefinition:
     name: str
     description: str = ""
     parameters: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class ToolCall:
+    """A tool call returned by an LLM provider."""
+
+    name: str
+    arguments: dict[str, Any]
+
+
+@dataclass(frozen=True, slots=True)
+class LLMResponse:
+    """Structured response from an LLM provider.
+
+    When the provider returns a conversational response, ``content``
+    contains the text.  When the provider selects a tool, ``tool_calls``
+    contains the selected tool invocations (and ``content`` is typically
+    empty).
+
+    Contract: ``content`` is *always* a ``str`` and ``tool_calls`` is *always*
+    a ``tuple`` — even when a provider hands us ``None``. This is the single
+    enforcement point that keeps ``None`` out of every downstream ``.strip()``,
+    ``.split()`` and string-format call in the runtime.
+    """
+
+    content: str = ""
+    tool_calls: tuple[ToolCall, ...] = ()
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        # Normalise a provider that returned None / a non-string content.
+        if self.content is None:
+            object.__setattr__(self, "content", "")
+        elif not isinstance(self.content, str):
+            object.__setattr__(self, "content", str(self.content))
+        # Normalise tool_calls to an immutable tuple (never None).
+        if self.tool_calls is None:
+            object.__setattr__(self, "tool_calls", ())
+        elif not isinstance(self.tool_calls, tuple):
+            object.__setattr__(self, "tool_calls", tuple(self.tool_calls))
+        if self.metadata is None:
+            object.__setattr__(self, "metadata", {})
 
 
 class ILLMProvider(ABC):
@@ -46,12 +90,12 @@ class ILLMProvider(ABC):
         prompt: str,
         system_prompt: str | None = None,
         tools: list[ToolDefinition] | None = None,
-    ) -> str:
+    ) -> LLMResponse:
         """Generate a complete response for a prompt.
 
         If *tools* are supplied the provider MAY return tool-call
-        content serialised as text.  Structured tool-call handling
-        will be added in a later phase.
+        content as :class:`ToolCall` instances inside the returned
+        :class:`LLMResponse`.
         """
 
     @abstractmethod

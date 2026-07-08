@@ -1,12 +1,16 @@
 """Base abstractions for Jarvis agents."""
 
+from __future__ import annotations
+
 from abc import abstractmethod
 from collections.abc import Iterable
-from typing import final
+from typing import TYPE_CHECKING, final
 
 from agents.contracts import AgentMessage, AgentResult, AgentTask
 from agents.interfaces import IAgent
-from orchestrator.interfaces import IEventBus, ISharedContext
+
+if TYPE_CHECKING:
+    from orchestrator.interfaces import IEventBus, ISharedContext
 
 
 class Agent(IAgent):

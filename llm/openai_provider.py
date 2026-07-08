@@ -2,10 +2,11 @@
 
 import json
 from collections.abc import AsyncIterable
+from typing import Any
 
 from llm.base import BaseLLMProvider, LLMConfig
 from llm.errors import LLMProviderError
-from llm.interfaces import ToolDefinition
+from llm.interfaces import LLMResponse, ToolCall, ToolDefinition
 from llm.registry import register_provider
 
 
@@ -28,13 +29,41 @@ class OpenAIProvider(BaseLLMProvider):
         prompt: str,
         system_prompt: str | None,
         tools: list[ToolDefinition] | None,
-    ) -> str:
+    ) -> LLMResponse:
         payload = self._build_payload(prompt, system_prompt, tools, stream=False)
         response = await self._http_post_json(self._url(), payload, self._headers())
         try:
-            return str(response["choices"][0]["message"]["content"])
+            message = response["choices"][0]["message"]
+            content = str(message.get("content") or "")
+            tool_calls = self._parse_tool_calls(message.get("tool_calls", []))
+            return LLMResponse(content=content, tool_calls=tuple(tool_calls))
         except (KeyError, IndexError, TypeError) as exc:
             raise LLMProviderError("OpenAI response did not include message content.") from exc
+
+    # ------------------------------------------------------------------
+    # Tool call parsing
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _parse_tool_calls(raw: list[dict[str, Any]]) -> list[ToolCall]:
+        """Parse OpenAI's ``tool_calls`` response format into ToolCall instances.
+
+        OpenAI returns tool_calls as::
+            [{"id": "...", "function": {"name": "...", "arguments": "..."}}]
+        """
+        result: list[ToolCall] = []
+        for call in raw:
+            func = call.get("function", {})
+            name = str(func.get("name", ""))
+            raw_args = func.get("arguments", "{}")
+            if isinstance(raw_args, str):
+                try:
+                    raw_args = json.loads(raw_args)
+                except (json.JSONDecodeError, TypeError):
+                    raw_args = {}
+            if name:
+                result.append(ToolCall(name=name, arguments=dict(raw_args)))
+        return result
 
     async def _stream_once(
         self,
@@ -71,6 +100,8 @@ class OpenAIProvider(BaseLLMProvider):
         }
         if tools:
             payload["tools"] = self._build_tools_payload(tools)
+        if self.config.max_tokens is not None:
+            payload["max_tokens"] = self.config.max_tokens
         return payload
 
     async def _stream_sse(

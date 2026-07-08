@@ -37,7 +37,11 @@ class MemoryService:
         return self._memory_manager
 
     async def enrich_prompt(
-        self, prompt: str, top_k: int = 5, max_context_length: int = 2000
+        self,
+        prompt: str,
+        top_k: int = 5,
+        max_context_length: int = 5000,
+        per_memory_chars: int = 2000,
     ) -> tuple[str, list[MemoryItem]]:
         """Search memory and inject relevant context into *prompt*.
 
@@ -46,7 +50,7 @@ class MemoryService:
         The retrieved memories are prepended as context with metadata
         (type, importance) so the LLM can use them.  Context is
         truncated to *max_context_length* characters to avoid prompt
-        pollution.
+        pollution.  Each memory is truncated to *per_memory_chars*.
         """
         try:
             memories = await self._memory_manager.search(prompt, top_k=top_k)
@@ -61,7 +65,7 @@ class MemoryService:
         char_count = 0
 
         for m in memories:
-            content = m.content[:500]
+            content = m.content[:per_memory_chars]
             tag = m.memory_type.value
             line = f"  [{tag}] (importance: {m.importance:.2f}) {content}"
             char_count += len(line)
@@ -73,14 +77,55 @@ class MemoryService:
         _logger.debug("Prompt enriched with %d memory items", len(memories))
         return enriched, memories
 
+    # Boilerplate/fallback responses that must never pollute long-term memory.
+    # Storing these caused a feedback loop: a failed turn was retrieved as
+    # "relevant context" on the next turn, dragging every answer toward the
+    # fallback path. See runtime redesign notes.
+    _JUNK_RESPONSE_MARKERS: tuple[str, ...] = (
+        "how can i help you",
+        "how can i assist you",
+        "i received your message",
+        "i encountered an unexpected issue",
+        "i'm not sure how to help",
+        "let me know if you need anything else",
+    )
+
+    @classmethod
+    def _is_storeworthy(cls, query: str, response: str) -> bool:
+        """Return True only for interactions worth remembering.
+
+        Rejects empty/failed/boilerplate answers and raw tool-call JSON so
+        the vector store stays a source of signal, not noise.
+        """
+        q = (query or "").strip()
+        r = (response or "").strip()
+        if not q or not r:
+            return False
+        low = r.lower()
+        if any(marker in low for marker in cls._JUNK_RESPONSE_MARKERS):
+            return False
+        # Raw tool-call payloads or JSON blobs, not natural language.
+        stripped = low.lstrip()
+        if stripped.startswith(("{", "[")) and ('"name"' in low or '"arguments"' in low):
+            return False
+        # Trivially short non-answers.
+        if len(r) < 3:
+            return False
+        return True
+
     async def store_interaction(
         self, query: str, response: str, importance: float | None = None
     ) -> str:
         """Store a query-response interaction in long-term memory.
 
         The *importance* is auto-calculated if not provided.
-        Returns the memory id.
+        Returns the memory id, or an empty string when the interaction is
+        judged not worth storing (empty/failed/boilerplate/tool-JSON).
         """
+        if not self._is_storeworthy(query, response):
+            _logger.debug("Skipped storing low-value interaction (query=%.40r)", query)
+            return ""
+
         content = f"Q: {query}\nA: {response}"
         imp = importance if importance is not None else calculate_importance(content)
 

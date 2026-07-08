@@ -19,8 +19,9 @@ class EchoProvider(BaseLLMProvider):
 
     async def _generate_once(
         self, prompt: str, system_prompt: str | None, tools=None
-    ) -> str:
-        return f"response:{prompt}"
+    ) -> LLMResponse:
+        from llm.interfaces import LLMResponse
+        return LLMResponse(content=f"response:{prompt}")
 
     async def _stream_once(
         self, prompt: str, system_prompt: str | None, tools=None
@@ -35,7 +36,7 @@ async def test_chat_session_stores_user_and_assistant_history() -> None:
 
     response = await session.send("hello")
 
-    assert response == "response:user: hello"
+    assert response.content == "response:user: hello"
     assert [message.role for message in session.history] == ["user", "assistant"]
 
 

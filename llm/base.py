@@ -10,7 +10,7 @@ from typing import Any, TypeVar
 import httpx
 
 from llm.errors import LLMError, LLMProviderError, LLMTimeoutError
-from llm.interfaces import ILLMProvider, ToolDefinition
+from llm.interfaces import ILLMProvider, LLMResponse, ToolCall, ToolDefinition
 
 T = TypeVar("T")
 
@@ -26,6 +26,7 @@ class LLMConfig:
     timeout_seconds: float = 30.0
     max_retries: int = 2
     retry_backoff_seconds: float = 0.25
+    max_tokens: int | None = 4096
 
 
 class BaseLLMProvider(ILLMProvider):
@@ -63,8 +64,23 @@ class BaseLLMProvider(ILLMProvider):
         prompt: str,
         system_prompt: str | None = None,
         tools: list[ToolDefinition] | None = None,
-    ) -> str:
+    ) -> LLMResponse:
         return await self._with_retries(lambda: self._generate_once(prompt, system_prompt, tools))
+
+    async def generate_text(
+        self,
+        prompt: str,
+        system_prompt: str | None = None,
+        tools: list[ToolDefinition] | None = None,
+    ) -> str:
+        """Convenience: return only the text content of a generation.
+
+        Always returns a ``str`` — never ``None`` — so callers can safely
+        ``.strip()``/``.split()`` the result (contract enforced here and in
+        :class:`~llm.interfaces.LLMResponse`).
+        """
+        response = await self.generate(prompt, system_prompt, tools)
+        return response.content or ""
 
     async def stream(
         self,
@@ -207,7 +223,7 @@ class BaseLLMProvider(ILLMProvider):
         prompt: str,
         system_prompt: str | None,
         tools: list[ToolDefinition] | None,
-    ) -> str:
+    ) -> LLMResponse:
         """Execute one (non-retried) generate call."""
 
     @abstractmethod

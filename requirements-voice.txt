@@ -1,0 +1,26 @@
+# Optional local voice stack for JARVIS — 100% local, zero cost.
+# Install with:  pip install -r requirements-voice.txt
+#
+# All engines run offline. No cloud services, no API keys.
+
+# Text-to-speech: Piper (local neural TTS, ONNX). GPL-3.0 — JARVIS invokes it
+# via the `python -m piper` CLI (subprocess), not by importing it, so the
+# project stays permissively licensed.
+piper-tts>=1.4,<2
+
+# Speech-to-text: faster-whisper (local Whisper, MIT).
+faster-whisper>=1.0
+
+# Microphone capture + speaker playback.
+sounddevice>=0.4
+
+# Wake-word detection (optional; the pipeline works without it).
+openwakeword>=0.6
+
+# ---------------------------------------------------------------------------
+# After installing, download a Piper voice model (one-time, ~60 MB):
+#
+#   python -m piper.download_voices en_US-lessac-medium --data-dir voice_models
+#
+# Then enable voice in .env:  VOICE_ENABLED=true
+# ---------------------------------------------------------------------------

@@ -220,19 +220,21 @@ class MemoryRecallProvider(BaseLLMProvider):
 
     async def _generate_once(
         self, prompt: str, system_prompt: str | None, tools=None
-    ) -> str:
+    ) -> LLMResponse:
+        from llm.interfaces import LLMResponse
         # Return a conversational response based on what memory context
         # the planner includes in the responder prompt.
         if "Boss" in prompt or "Nikhil" in prompt:
-            return "Hi Boss! Your name is Nikhil and your favourite programming language is Python."
+            return LLMResponse(content="Hi Boss! Your name is Nikhil and your favourite programming language is Python.")
         if "software engineer" in prompt:
-            return "You work as a software engineer."
-        return "I received your message."
+            return LLMResponse(content="You work as a software engineer.")
+        return LLMResponse(content="I received your message.")
 
     async def _stream_once(
         self, prompt: str, system_prompt: str | None, tools=None
     ) -> AsyncIterable[str]:
-        yield await self._generate_once(prompt, system_prompt, tools)
+        response = await self._generate_once(prompt, system_prompt, tools)
+        yield response.content
 
 
 @pytest.mark.asyncio

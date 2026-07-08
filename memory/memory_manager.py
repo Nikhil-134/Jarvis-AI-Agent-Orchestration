@@ -79,6 +79,7 @@ _DEFAULT_IMPORTANCE_THRESHOLD = 0.3
 
 
 class MemoryManager(IMemoryStore):
+    __doc__ = IMemoryStore.__doc__ or ""
     """Unified memory manager combining vector search, document persistence,
     embedding generation, and working memory.
 
@@ -267,6 +268,35 @@ class MemoryManager(IMemoryStore):
         items = [it for it in items if it.importance >= min_importance]
         items.sort(key=lambda it: it.importance, reverse=True)
         return items[:limit]
+
+    async def recent(
+        self,
+        memory_type: MemoryType | None = None,
+        limit: int = 50,
+    ) -> list[MemoryItem]:
+        """Return the most recently stored memories, newest first.
+
+        Unlike :meth:`search_by_metadata` (which ranks by importance), this
+        preserves chronological order — required to restore a conversation
+        session or answer "what did we discuss recently". Reads only from the
+        durable document store, so it works across process restarts.
+        """
+        self._ensure_ready()
+
+        filters: dict[str, Any] = {}
+        if memory_type is not None:
+            filters["memory_type"] = memory_type.value
+
+        # The SQLite document store returns rows in rowid-DESC (insertion)
+        # order, i.e. newest first.
+        docs = await self._document_store.search("memory", filters=filters, limit=limit)
+        items: list[MemoryItem] = []
+        for doc in docs:
+            try:
+                items.append(MemoryItem.from_document(doc))
+            except (KeyError, ValueError, TypeError):
+                _logger.warning("Skipping corrupt memory document during recent() scan")
+        return items
 
     async def summarize(
         self, memory_ids: list[str], llm_provider: BaseLLMProvider | None = None

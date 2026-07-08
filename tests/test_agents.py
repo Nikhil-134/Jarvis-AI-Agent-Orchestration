@@ -28,8 +28,9 @@ class StaticPlannerProvider(BaseLLMProvider):
 
     async def _generate_once(
         self, prompt: str, system_prompt: str | None, tools=None
-    ) -> str:
-        return "1. inspect\n2. execute"
+    ) -> LLMResponse:
+        from llm.interfaces import LLMResponse
+        return LLMResponse(content="1. inspect\n2. execute")
 
     async def _stream_once(
         self, prompt: str, system_prompt: str | None, tools=None
@@ -73,15 +74,22 @@ async def test_memory_agent_handles_memory_tasks(tmp_path: str) -> None:
 
 @pytest.mark.asyncio
 async def test_tool_agent_handles_tool_tasks() -> None:
-    result = await ToolAgent().handle(AgentTask(task_type="tool.execute"))
+    result = await ToolAgent().handle(AgentTask(
+        task_type="tool.execute",
+        payload={"tool_name": "system_info", "arguments": {}},
+    ))
 
     assert result.success is True
     assert result.agent_name == "tool"
 
 
 @pytest.mark.asyncio
-async def test_voice_agent_handles_voice_tasks() -> None:
-    result = await VoiceAgent().handle(AgentTask(task_type="voice.output"))
+async def test_voice_agent_reports_unavailable_without_providers() -> None:
+    # With no TTS/STT/audio wired in, the agent must degrade gracefully.
+    result = await VoiceAgent().handle(
+        AgentTask(task_type="voice.output", payload={"text": "hello"})
+    )
 
-    assert result.success is True
+    assert result.success is False
     assert result.agent_name == "voice"
+    assert result.data["status"] == "unavailable"

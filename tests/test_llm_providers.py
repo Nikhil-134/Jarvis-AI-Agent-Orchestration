@@ -28,11 +28,12 @@ class FlakyProvider(BaseLLMProvider):
 
     async def _generate_once(
         self, prompt: str, system_prompt: str | None, tools=None
-    ) -> str:
+    ) -> LLMResponse:
+        from llm.interfaces import LLMResponse
         self.calls += 1
         if self.calls == 1:
             raise LLMProviderError("temporary")
-        return "ok"
+        return LLMResponse(content="ok")
 
     async def _stream_once(
         self, prompt: str, system_prompt: str | None, tools=None
@@ -47,7 +48,7 @@ async def test_base_provider_retry_logic_retries_llm_errors() -> None:
 
     result = await provider.generate("hello")
 
-    assert result == "ok"
+    assert result.content == "ok"
     assert provider.calls == 2
 
 
@@ -63,7 +64,22 @@ async def test_openai_provider_parses_generate_response(monkeypatch) -> None:
     monkeypatch.setattr(provider, "_http_post_json", mock_post_json)
 
     result = await provider.generate("prompt")
-    assert result == "hello"
+    assert result.content == "hello"
+
+
+@pytest.mark.asyncio
+async def test_ollama_provider_parses_generate_response(monkeypatch) -> None:
+    provider = OllamaProvider(
+        LLMConfig(provider="ollama", model="test", retry_backoff_seconds=0)
+    )
+
+    async def mock_post_json(url: str, payload: dict, headers: dict) -> dict:
+        return {"message": {"content": "hello"}}
+
+    monkeypatch.setattr(provider, "_http_post_json", mock_post_json)
+
+    result = await provider.generate("prompt")
+    assert result.content == "hello"
 
 
 @pytest.mark.asyncio
@@ -95,7 +111,7 @@ async def test_ollama_provider_parses_generate_response(monkeypatch) -> None:
     monkeypatch.setattr(provider, "_http_post_json", mock_post_json)
 
     result = await provider.generate("prompt")
-    assert result == "hello"
+    assert result.content == "hello"
 
 
 @pytest.mark.asyncio

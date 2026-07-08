@@ -4,6 +4,7 @@ import logging
 from dataclasses import dataclass
 
 from llm.base import BaseLLMProvider
+from llm.interfaces import LLMResponse, ToolDefinition
 
 _logger = logging.getLogger(__name__)
 
@@ -38,22 +39,36 @@ class ChatSession:
         """Return immutable conversation history."""
         return tuple(self._history)
 
-    async def send(self, prompt: str) -> str:
-        """Send a prompt, store user and assistant messages, return the response."""
+    async def send(
+        self,
+        prompt: str,
+        tools: list[ToolDefinition] | None = None,
+    ) -> LLMResponse:
+        """Send a prompt, store user and assistant messages, return the LLM response.
+
+        When *tools* are provided the LLM may return tool calls instead
+        of (or in addition to) text content in the ``LLMResponse``.
+        """
         self._history.append(ChatMessage(role="user", content=prompt))
         self._prompt_cache.append(f"user: {prompt}")
-        response = await self.provider.generate(self._conversation_prompt(), self.system_prompt)
-        self._history.append(ChatMessage(role="assistant", content=response))
-        self._prompt_cache.append(f"assistant: {response}")
+        response: LLMResponse = await self.provider.generate(
+            self._conversation_prompt(), self.system_prompt, tools=tools,
+        )
+        self._history.append(ChatMessage(role="assistant", content=response.content))
+        self._prompt_cache.append(f"assistant: {response.content}")
         _logger.debug("Chat session send: %d messages in history", len(self._history))
         return response
 
-    async def stream(self, prompt: str) -> list[str]:
+    async def stream(
+        self,
+        prompt: str,
+        tools: list[ToolDefinition] | None = None,
+    ) -> list[str]:
         """Stream a prompt response and store the final assistant message."""
         self._history.append(ChatMessage(role="user", content=prompt))
         self._prompt_cache.append(f"user: {prompt}")
         chunks: list[str] = []
-        async for chunk in self.provider.stream(self._conversation_prompt(), self.system_prompt):
+        async for chunk in self.provider.stream(self._conversation_prompt(), self.system_prompt, tools=tools):
             chunks.append(chunk)
         response = "".join(chunks)
         self._history.append(ChatMessage(role="assistant", content=response))
@@ -66,6 +81,22 @@ class ChatSession:
         self._history.clear()
         self._prompt_cache.clear()
         _logger.debug("Chat session history cleared")
+
+    def append_message(self, role: str, content: str) -> None:
+        """Append a message to the conversation history and cache."""
+        self._history.append(ChatMessage(role=role, content=content))
+        self._prompt_cache.append(f"{role}: {content[:200]}")
+
+    def replace_last_assistant(self, content: str) -> None:
+        """Replace the last assistant message in history and cache."""
+        for i in range(len(self._history) - 1, -1, -1):
+            if self._history[i].role == "assistant":
+                self._history[i] = ChatMessage(role="assistant", content=content)
+                break
+        for i in range(len(self._prompt_cache) - 1, -1, -1):
+            if self._prompt_cache[i].startswith("assistant:"):
+                self._prompt_cache[i] = f"assistant: {content[:200]}"
+                break
 
     def _conversation_prompt(self) -> str:
         """Render history into a provider-neutral prompt string."""

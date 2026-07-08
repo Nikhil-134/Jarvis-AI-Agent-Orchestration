@@ -1,20 +1,36 @@
 """Tools package exports."""
 
-from typing import Any
+from tools.context import ToolContext
+from tools.engine import ToolExecutionEngine, ToolResult
+from tools.exceptions import (
+    ToolAlreadyRegisteredError,
+    ToolError,
+    ToolExecutionError,
+    ToolNotFoundError,
+    ToolPermissionDeniedError,
+    ToolValidationError,
+)
+from tools.interfaces import ITool, IToolExecutionEngine, IToolRegistry, PermissionLevel, ToolSpec
+from tools.manager import ToolManager
+from tools.permissions import PermissionManager
+from tools.registry import ToolRegistry
 
 __all__ = [
     "ITool",
+    "IToolExecutionEngine",
     "IToolRegistry",
+    "PermissionLevel",
+    "PermissionManager",
+    "ToolAlreadyRegisteredError",
+    "ToolContext",
+    "ToolError",
+    "ToolExecutionEngine",
+    "ToolExecutionError",
+    "ToolManager",
+    "ToolNotFoundError",
+    "ToolPermissionDeniedError",
+    "ToolRegistry",
+    "ToolResult",
     "ToolSpec",
+    "ToolValidationError",
 ]
-
-
-def __getattr__(name: str) -> Any:
-    if name in {"ITool", "IToolRegistry", "ToolSpec"}:
-        from tools.interfaces import ITool, IToolRegistry, ToolSpec
-        return {
-            "ITool": ITool,
-            "IToolRegistry": IToolRegistry,
-            "ToolSpec": ToolSpec,
-        }[name]
-    raise AttributeError(f"module 'tools' has no attribute {name!r}")

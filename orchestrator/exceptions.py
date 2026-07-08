@@ -1,17 +1,15 @@
-"""Custom exceptions for orchestration failures."""
+"""Orchestrator exceptions — re-exported from core.exceptions."""
 
+from core.exceptions import (
+    AgentAlreadyRegisteredError,
+    AgentNotRegisteredError,
+    NoAgentForTaskError,
+    OrchestratorError,
+)
 
-class OrchestratorError(Exception):
-    """Base exception for orchestrator errors."""
-
-
-class AgentAlreadyRegisteredError(OrchestratorError):
-    """Raised when an agent name is registered more than once."""
-
-
-class NoAgentForTaskError(OrchestratorError):
-    """Raised when no registered agent can handle a task."""
-
-
-class AgentNotRegisteredError(OrchestratorError):
-    """Raised when an agent name is not registered."""
+__all__ = [
+    "AgentAlreadyRegisteredError",
+    "AgentNotRegisteredError",
+    "NoAgentForTaskError",
+    "OrchestratorError",
+]

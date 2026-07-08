@@ -1,13 +1,5 @@
-"""LLM provider exception types."""
+"""LLM provider exception types — re-exported from core.exceptions."""
 
+from core.exceptions import LLMError, LLMProviderError, LLMTimeoutError
 
-class LLMError(Exception):
-    """Base exception for LLM provider failures."""
-
-
-class LLMProviderError(LLMError):
-    """Raised when a provider returns an invalid or failed response."""
-
-
-class LLMTimeoutError(LLMError):
-    """Raised when an LLM provider request times out."""
+__all__ = ["LLMError", "LLMProviderError", "LLMTimeoutError"]

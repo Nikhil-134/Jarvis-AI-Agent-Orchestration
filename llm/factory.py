@@ -29,6 +29,7 @@ def build_llm_provider(settings: Settings) -> BaseLLMProvider:
         timeout_seconds=settings.llm_timeout_seconds,
         max_retries=settings.llm_max_retries,
         retry_backoff_seconds=settings.llm_retry_backoff_seconds,
+        max_tokens=settings.llm_max_tokens,
     )
 
     registry = get_provider_registry()

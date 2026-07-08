@@ -11,13 +11,30 @@ from uuid import uuid4
 
 
 class MemoryType(str, Enum):
-    """Categorisation of stored memory entries."""
+    """Categorisation of stored memory entries.
 
+    The first block is the original taxonomy (kept for backward compatibility
+    with existing stored documents). The second block was added for the
+    persistent-memory layer (sessions, projects, reflection, user profile).
+    All values are stable strings — never rename an existing value, or old
+    rows in the document store would fail to deserialise.
+    """
+
+    # Original taxonomy
     CONVERSATION = "conversation"
     FACT = "fact"
     SUMMARY = "summary"
     PREFERENCE = "preference"
     WORKING = "working"
+
+    # Persistent-memory taxonomy
+    PROJECT = "project"
+    TASK = "task"
+    DECISION = "decision"
+    IDEA = "idea"
+    REFLECTION = "reflection"
+    USER_PROFILE = "user_profile"
+    MEETING_NOTES = "meeting_notes"
 
 
 _IMPORTANT_KEYWORDS = frozenset({
